@@ -70,6 +70,9 @@ exporter = { otlp-grpc = { endpoint = "http://127.0.0.1:4317" } }
 Restart Codex after changing the config. New Codex activity should start filling
 the dashboard within about a minute.
 
+Keep this dashboard process running while you use Codex to capture new OTLP
+events. Events emitted while it is stopped are not backfilled.
+
 ### Already exporting Codex OTLP elsewhere?
 
 This dashboard listens on the standard OTLP ports (gRPC `:4317`, HTTP `:4318`) so
