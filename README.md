@@ -1,6 +1,6 @@
 # codex-usage-dashboard
 
-**English** | [日本語](README_ja.md)
+**English** | [日本語](README.ja.md)
 
 `codex-usage-dashboard` is a local, single-binary dashboard for Codex and Claude
 Code usage, cost estimates, and attribution.
