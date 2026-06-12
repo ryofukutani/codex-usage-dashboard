@@ -46,11 +46,18 @@ public class UsageJob {
     @ConfigProperty(name = "codex.bin", defaultValue = "codex")
     String codexBin;
 
+    @ConfigProperty(name = "codex-usage-dashboard.codex.enabled", defaultValue = "true")
+    boolean codexEnabled;
+
     @ConfigProperty(name = "codex.usage.timeout-ms", defaultValue = "15000")
     long timeoutMs;
 
     @Scheduled(every = "{codex-usage-dashboard.usage.every}", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void run() {
+        if (!codexEnabled) {
+            LOG.debug("Codex support disabled; skipping usage poll");
+            return;
+        }
         JsonNode result;
         try {
             result = readRateLimits();

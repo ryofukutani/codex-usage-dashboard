@@ -5,7 +5,7 @@
 - JDK 25 or newer. A JVM build needs any JDK 25+; the native build needs a
   GraalVM 25 distribution with `native-image` available.
 - Maven wrapper (`./mvnw`) from this repository
-- Codex CLI installed and authenticated for live usage polling
+- Codex CLI installed and authenticated when verifying live Codex usage polling
 
 The Maven wrapper downloads Maven 3.9.12.
 
@@ -22,8 +22,6 @@ Run tests:
 ```sh
 ./mvnw -q test
 ```
-
-There is no automated test suite yet, so this currently runs no tests.
 
 Run in Quarkus dev mode:
 
@@ -114,18 +112,21 @@ Codex can send OTLP directly to the gRPC receiver:
 exporter = { otlp-grpc = { endpoint = "http://127.0.0.1:4317" } }
 ```
 
-An OpenTelemetry Collector can fan out to this app with an OTLP/HTTP protobuf
-exporter:
+Claude Code can send OTLP logs directly to the same receiver. For persistent
+local setup, merge this into `~/.claude/settings.json`:
 
-```yaml
-exporters:
-  otlphttp/codex_usage_dashboard:
-    endpoint: http://127.0.0.1:4318
+```json
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://127.0.0.1:4317"
+  }
+}
 ```
 
-The exporter appends `/v1/logs` automatically. gzip is supported.
-
-Claude Code can send OTLP logs directly to the same receiver:
+For a one-off session:
 
 ```sh
 export CLAUDE_CODE_ENABLE_TELEMETRY=1
@@ -137,6 +138,17 @@ claude
 
 Only Claude Code log/events are used by this dashboard. Metrics and traces are
 accepted by the receiver but discarded.
+
+An OpenTelemetry Collector can fan out to this app with an OTLP/HTTP protobuf
+exporter:
+
+```yaml
+exporters:
+  otlphttp/codex_usage_dashboard:
+    endpoint: http://127.0.0.1:4318
+```
+
+The exporter appends `/v1/logs` automatically. gzip is supported.
 
 ## Database Replay
 

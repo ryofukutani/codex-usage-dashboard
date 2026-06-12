@@ -50,6 +50,14 @@ Implemented by `jobs/AnnotateJob`, scheduled every 60 seconds by default.
 The job reads `otel_log_records` after cursor `annotate_log_id`, parses raw JSON,
 and keeps rows that match either tool's usage/error shape.
 
+Tool support is controlled independently:
+
+- `codex-usage-dashboard.codex.enabled=true`
+- `codex-usage-dashboard.claude.enabled=true`
+
+Disabled tool rows are skipped and the forward cursor still advances.
+The static dashboard reads `/api/config` and hides disabled source tabs.
+
 Codex rows are kept when they contain either:
 
 - `attributes.input_token_count`
@@ -99,6 +107,9 @@ account/rateLimits/read
 ```
 
 Each returned primary/secondary usage window is appended to `usage_samples`.
+
+The usage job also obeys `codex-usage-dashboard.codex.enabled`; when Codex is
+disabled, it does not launch the `codex` binary.
 
 ## Tables
 

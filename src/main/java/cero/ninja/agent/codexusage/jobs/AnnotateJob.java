@@ -101,6 +101,12 @@ public class AnnotateJob {
     @ConfigProperty(name = "codex-usage-dashboard.annotate.batch-size", defaultValue = "500")
     int batchSize;
 
+    @ConfigProperty(name = "codex-usage-dashboard.codex.enabled", defaultValue = "true")
+    boolean codexEnabled;
+
+    @ConfigProperty(name = "codex-usage-dashboard.claude.enabled", defaultValue = "true")
+    boolean claudeEnabled;
+
     @Scheduled(every = "{codex-usage-dashboard.annotate.every}", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void run() {
         long cursor = cursors.getLong(CURSOR, 0);
@@ -162,7 +168,14 @@ public class AnnotateJob {
         JsonNode resource = root.path("resource_attributes");
 
         if (isClaudeRecord(root, resource)) {
+            if (!claudeEnabled) {
+                return false;
+            }
             return annotateClaude(row, root, attrs, resource);
+        }
+
+        if (!codexEnabled) {
+            return false;
         }
 
         Long inputTokens = optLong(attrs, "input_token_count");
@@ -272,6 +285,7 @@ public class AnnotateJob {
         ClaudeRateCard.Costs costs = hasBillableClaudeTokens(inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens)
                 ? claudeRateCard.compute(model, inputTokens, cacheCreationTokens, cacheReadTokens, outputTokens)
                 : null;
+        Double costUsd = costs == null ? reportedCostUsd : Double.valueOf(costs.total());
         String querySource = optString(attrs, "query_source");
         String agentName = optString(attrs, "agent.name");
         String serviceName = optString(resource, "service.name");
@@ -299,7 +313,7 @@ public class AnnotateJob {
                 .param("cached_credits", null)
                 .param("output_credits", null)
                 .param("total_credits", null)
-                .param("cost_usd", costs == null ? reportedCostUsd : costs.total())
+                .param("cost_usd", costUsd)
                 .param("input_cost_usd", costs == null ? null : costs.input())
                 .param("cached_input_cost_usd", null)
                 .param("cache_creation_cost_usd", costs == null ? null : costs.cacheCreation())

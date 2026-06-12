@@ -46,6 +46,7 @@
   .card .v small { font-size: 13px; color: var(--muted); font-weight: 400; }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
   [hidden] { display: none !important; }
+  .empty-state { min-height: 42vh; display: grid; place-items: center; color: var(--muted); }
   .source-claude .top-grid { display: block; }
   .source-claude .metrics { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -130,6 +131,8 @@
   </div>
 </header>
 <main id="app">
+  <section id="emptyState" class="empty-state" hidden>No tools enabled.</section>
+
   <section class="top-grid">
     <div class="metrics" id="cards"></div>
     <div class="panel codex-only"><div id="gauge5h" class="chart gauge"></div></div>
@@ -376,6 +379,35 @@ const state = {
     return [key, METRIC_MODES[mode] ? mode : DEFAULT_METRIC_MODE];
   })),
 };
+let toolConfig = { codexEnabled: true, claudeEnabled: true };
+
+function sourceEnabled(source) {
+  return source === "codex" ? toolConfig.codexEnabled : toolConfig.claudeEnabled;
+}
+
+function enabledSources() {
+  return Object.keys(SOURCES).filter(sourceEnabled);
+}
+
+function hasEnabledSource() {
+  return enabledSources().length > 0;
+}
+
+function reconcileSourceAndRange() {
+  const enabled = enabledSources();
+  if (enabled.length && !sourceEnabled(state.source)) {
+    state.source = enabled[0];
+  }
+  if (!toolConfig.codexEnabled && state.range === CURRENT_5H_RANGE) {
+    state.range = DEFAULT_RANGE;
+  }
+}
+
+function availableRanges() {
+  return toolConfig.codexEnabled
+    ? RANGES
+    : RANGES.filter(range => range.id !== CURRENT_5H_RANGE);
+}
 
 // Stable colors per attribution category; unknown keys fall back to the palette.
 const PALETTE = ["#5b8cff", "#43c59e", "#e0a458", "#e0586b", "#9d7bff", "#4dd0e1", "#c2cc4d"];
@@ -412,6 +444,20 @@ async function getJSON(path) {
   const r = await fetch(path, { cache: "no-store" });
   if (!r.ok) throw new Error(path + " → " + r.status);
   return r.json();
+}
+
+async function loadConfig() {
+  try {
+    const cfg = await getJSON("/api/config");
+    toolConfig = {
+      codexEnabled: cfg.codexEnabled !== false,
+      claudeEnabled: cfg.claudeEnabled !== false,
+    };
+  } catch {
+    toolConfig = { codexEnabled: true, claudeEnabled: true };
+  }
+  reconcileSourceAndRange();
+  if (hasEnabledSource()) writeUrlState();
 }
 
 // SeriesPoint[] {bucket, series, <value>} -> { buckets:[...], names:[...], data:{name:[aligned values]} }
@@ -462,7 +508,7 @@ function setupSelect(id, items, value) {
 function setupControls() {
   setupTabs();
   setupMetricToggles();
-  setupSelect("rangeSelect", RANGES, state.range);
+  setupSelect("rangeSelect", availableRanges(), state.range);
   setupSelect("grainSelect", GRAINS, state.grain);
   updateCustomControls();
   $("rangeSelect").addEventListener("change", () => selectTime("range", $("rangeSelect").value));
@@ -516,11 +562,25 @@ function setupTabs() {
 }
 
 function renderTabs() {
+  const enabled = enabledSources();
+  const noTools = enabled.length === 0;
+  document.querySelector(".tool-tabs").hidden = enabled.length <= 1;
+  document.querySelector(".controls").hidden = noTools;
+  document.querySelector(".status-stack").hidden = noTools;
   document.querySelectorAll(".tool-tab").forEach(tab => {
+    tab.hidden = !sourceEnabled(tab.dataset.source);
     const active = tab.dataset.source === state.source;
     tab.classList.toggle("active", active);
     tab.setAttribute("aria-selected", String(active));
   });
+  if (noTools) {
+    $("app").classList.remove("source-claude");
+    $("emptyState").hidden = false;
+    document.querySelectorAll("#app > section:not(#emptyState)").forEach(el => { el.hidden = true; });
+    return;
+  }
+  $("emptyState").hidden = true;
+  document.querySelectorAll("#app > section:not(.codex-only):not(.claude-only):not(#emptyState)").forEach(el => { el.hidden = false; });
   const isCodex = state.source === "codex";
   $("app").classList.toggle("source-claude", !isCodex);
   document.querySelectorAll(".codex-only").forEach(el => { el.hidden = !isCodex; });
@@ -528,7 +588,7 @@ function renderTabs() {
 }
 
 function selectSource(source) {
-  if (!SOURCES[source] || state.source === source) return;
+  if (!SOURCES[source] || !sourceEnabled(source) || state.source === source) return;
   state.source = source;
   lastData = null;
   writeUrlState();
@@ -1300,6 +1360,13 @@ function renderMetricPanels() {
 }
 
 async function refresh() {
+  reconcileSourceAndRange();
+  renderTabs();
+  if (!hasEnabledSource()) {
+    lastData = null;
+    $("err").textContent = "";
+    return;
+  }
   state.timeBounds = await resolveTimeBounds();
   // Fetch every panel independently. allSettled (not all) so a single failing
   // endpoint (e.g. /usage/history while the codex usage poller is down) updates
@@ -1375,12 +1442,16 @@ async function refresh() {
   $("err").textContent = failures ? ("⚠ " + failures + " request(s) failed") : "";
 }
 
-setupControls();
-$("modalClose").addEventListener("click", closeModal);
-$("modal").addEventListener("click", (e) => { if (e.target === $("modal")) closeModal(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
-refresh();
-setInterval(refresh, 30000);
+async function init() {
+  await loadConfig();
+  setupControls();
+  $("modalClose").addEventListener("click", closeModal);
+  $("modal").addEventListener("click", (e) => { if (e.target === $("modal")) closeModal(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
+  refresh();
+  setInterval(refresh, 30000);
+}
+init();
 </script>
 </body>
 </html>

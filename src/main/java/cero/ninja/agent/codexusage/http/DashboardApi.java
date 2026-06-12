@@ -13,6 +13,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -44,7 +45,17 @@ public class DashboardApi {
     @Inject
     ObjectMapper objectMapper;
 
+    @ConfigProperty(name = "codex-usage-dashboard.codex.enabled", defaultValue = "true")
+    boolean codexEnabled;
+
+    @ConfigProperty(name = "codex-usage-dashboard.claude.enabled", defaultValue = "true")
+    boolean claudeEnabled;
+
     // ---- DTOs (mapped from result-set column labels by RecordMapper) ----
+
+    public record Config(
+            boolean codexEnabled,
+            boolean claudeEnabled) {}
 
     public record Summary(
             double totalCredits,
@@ -261,6 +272,12 @@ public class DashboardApi {
             "strftime('%Y-%m-%d %H:%M', " + BUCKET_EPOCH + ", 'unixepoch')";
 
     // ---- Endpoints ----
+
+    @GET
+    @Path("/config")
+    public Config config() {
+        return new Config(codexEnabled, claudeEnabled);
+    }
 
     @GET
     @Path("/summary")

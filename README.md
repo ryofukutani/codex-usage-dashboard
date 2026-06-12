@@ -2,23 +2,30 @@
 
 **English** | [日本語](README_ja.md)
 
-`codex-usage-dashboard` is a local, single-binary dashboard for Codex usage,
-credit and cost estimates, and attribution.
+`codex-usage-dashboard` is a local, single-binary dashboard for Codex and Claude
+Code usage, cost estimates, and attribution.
 
-It receives Codex OTLP logs, enriches them with local Codex metadata, polls the
-current Codex usage window, and visualizes them in a dashboard.
+For Codex, it receives OTLP logs, enriches them with local Codex metadata, polls
+the current Codex usage window, and visualizes the result.
 
-It can also normalize Claude Code OTLP `api_request` logs into token and USD
-cost rows. Codex and Claude Code are shown on separate dashboard tabs; Codex USD
-cost is estimated from credits at 1000 credits = $40, while Claude Code cost is
-calculated from its token fields using the Claude API pricing table.
+For Claude Code, it receives OTLP log/events and normalizes `api_request` records
+into token and USD cost rows. Codex and Claude Code are shown on separate
+dashboard tabs; Codex USD cost is estimated from credits at 1000 credits = $40,
+while Claude Code cost is calculated from its token fields using the Claude API
+pricing table.
 
 ## Requirements
 
-- **Codex CLI**, installed and signed in
-  - The dashboard still runs without it (credits and events come from OTLP), but
-    the usage % gauges stay empty
-- Codex set up to export OTLP (see [Configure Codex OTLP](#configure-codex-otlp))
+- Codex tab: Codex OTLP export configured (see
+  [Configure Codex OTLP](#configure-codex-otlp))
+- Codex usage % gauges: Codex CLI installed and signed in
+- Claude Code tab: Claude Code telemetry configured (see
+  [Configure Claude Code OTLP](#configure-claude-code-otlp))
+
+The dashboard can run with only one tool enabled. Set
+`CODEX_USAGE_DASHBOARD_CODEX_ENABLED=false` on machines that do not use Codex, or
+`CODEX_USAGE_DASHBOARD_CLAUDE_ENABLED=false` on machines that do not use Claude
+Code.
 
 ## Quick Start
 
@@ -86,31 +93,31 @@ the dashboard within about a minute.
 Keep this dashboard process running while you use Codex or Claude Code to capture
 new OTLP events. Events emitted while it is stopped are not backfilled.
 
-### Already exporting Codex OTLP elsewhere?
-
-This dashboard listens on the standard OTLP ports (gRPC `:4317`, HTTP `:4318`) so
-Codex can point at it directly. If you already run an
-[OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) on those ports,
-keep Codex pointed at the collector, fan out a copy to this dashboard, and move
-the dashboard off the standard ports.
-
-Quarkus reads a `.env` file from the working directory, so put the overrides
-there:
-
-```sh
-# .env
-QUARKUS_GRPC_SERVER_PORT=14317
-QUARKUS_HTTP_PORT=14318
-```
-
-Then have the collector send OTLP/HTTP protobuf to `http://127.0.0.1:14318/v1/logs`
-(or gRPC to `:14317`).
-
 ## Configure Claude Code OTLP
 
-Claude Code support is optional. It uses Claude Code's OTLP log/events stream,
-not Codex's local SQLite enrichment path. Start this dashboard, then run Claude
-Code with its OTLP logs exporter pointed at the dashboard:
+Claude Code sends OTLP log/events to the same local gRPC receiver. The dashboard
+uses Claude Code `api_request` log records for token and cost charts; metrics and
+traces may be accepted by the receiver, but they are not stored for dashboard
+charts.
+
+For persistent setup, edit `~/.claude/settings.json` and merge these entries into
+the existing `env` object:
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_LOGS_EXPORTER": "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://127.0.0.1:4317"
+  }
+}
+```
+
+Restart Claude Code, or start a new session, after changing the settings file.
+
+For a one-off session, set the same values in the shell before launching
+`claude`:
 
 ```sh
 export CLAUDE_CODE_ENABLE_TELEMETRY=1
@@ -123,11 +130,30 @@ claude
 The dashboard normalizes Claude Code `api_request` log records that include
 token fields. It calculates USD cost by token type at ingest time; if the log
 also includes `cost_usd`, that reported value is preserved separately for
-comparison. Metrics and traces may be accepted by the receiver, but they are not
-stored for dashboard charts.
+comparison.
 
 For the full Claude Code telemetry configuration surface, see the
 [Claude Code Monitoring docs](https://code.claude.com/docs/en/monitoring-usage).
+
+## Already Exporting OTLP Elsewhere?
+
+This dashboard listens on the standard OTLP ports (gRPC `:4317`, HTTP `:4318`) so
+Codex and Claude Code can point at it directly. If you already run an
+[OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) on those ports,
+keep your tools pointed at the collector, fan out a copy to this dashboard, and
+move the dashboard off the standard ports.
+
+Quarkus reads a `.env` file from the working directory, so put the overrides
+there:
+
+```sh
+# .env
+QUARKUS_GRPC_SERVER_PORT=14317
+QUARKUS_HTTP_PORT=14318
+```
+
+Then have the collector send OTLP/HTTP protobuf to `http://127.0.0.1:14318/v1/logs`
+(or gRPC to `:14317`).
 
 ## LAN Access
 
@@ -168,12 +194,21 @@ CODEX_STATE5_PATH="$HOME/.codex/state_5.sqlite"
 CODEX_LOGS2_PATH="$HOME/.codex/logs_2.sqlite"
 CODEX_BIN=codex
 
+# Tool-specific ingestion flags
+CODEX_USAGE_DASHBOARD_CODEX_ENABLED=true
+CODEX_USAGE_DASHBOARD_CLAUDE_ENABLED=true
+
 # Local telemetry retention
 CODEX_USAGE_DASHBOARD_RETENTION_EVERY=1h
 CODEX_USAGE_DASHBOARD_RETENTION_OTEL_LOG_RECORDS=14d
 CODEX_USAGE_DASHBOARD_RETENTION_ANNOTATED_EVENTS=365d
 CODEX_USAGE_DASHBOARD_RETENTION_USAGE_SAMPLES=365d
 ```
+
+Set `CODEX_USAGE_DASHBOARD_CODEX_ENABLED=false` on machines without Codex. This
+skips Codex OTLP annotation and Codex usage polling, so the app will not try to
+launch `codex`. Set `CODEX_USAGE_DASHBOARD_CLAUDE_ENABLED=false` to ignore Claude
+Code OTLP logs. Disabled tools are also hidden from the dashboard tool switcher.
 
 Retention is enforced independently for the tables owned by this app:
 

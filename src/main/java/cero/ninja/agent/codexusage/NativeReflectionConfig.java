@@ -6,6 +6,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
 
 @RegisterForReflection(targets = {
         AnnotateJob.RawRow.class,
+        DashboardApi.Config.class,
         DashboardApi.Summary.class,
         DashboardApi.UsageLatest.class,
         DashboardApi.ModelCredits.class,
