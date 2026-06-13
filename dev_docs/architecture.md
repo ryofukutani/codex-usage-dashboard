@@ -34,8 +34,9 @@ Supported inputs:
 - OTLP/HTTP protobuf on `:4318/v1/logs`
 - gzip-compressed OTLP/HTTP protobuf
 
-Traces and metrics are accepted and discarded. Logs are converted mechanically
-from protobuf to JSON and appended to `otel_log_records(record_json)`.
+Traces and metrics are accepted and discarded. Logs that pass the receive-time
+drop filter are converted mechanically from protobuf to JSON and appended to
+`otel_log_records(record_json)`.
 
 Claude Code cost and token charts use its log/event `api_request` records. The
 dashboard does not persist Claude Code metrics or traces.

@@ -20,8 +20,9 @@ attributes.originator
 resource_attributes.host.name
 ```
 
-The Java receiver stores every OTLP log record raw, but `AnnotateJob` only keeps
-records with token counts or `error.message` in `annotated_events`.
+The Java receiver stores OTLP log records raw after the receive-time drop filter;
+`AnnotateJob` only keeps records with token counts or `error.message` in
+`annotated_events`.
 
 See [`codex-data-model.md`](codex-data-model.md) for the observed OTLP and
 Codex SQLite fields, including which IDs are not present on completion rows.

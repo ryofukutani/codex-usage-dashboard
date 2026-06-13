@@ -5,14 +5,10 @@
 `codex-usage-dashboard` is a local, single-binary dashboard for Codex and Claude
 Code usage, cost estimates, and attribution.
 
-For Codex, it receives OTLP logs, enriches them with local Codex metadata, polls
-the current Codex usage window, and visualizes the result.
-
-For Claude Code, it receives OTLP log/events and normalizes `api_request` records
-into token and USD cost rows. Codex and Claude Code are shown on separate
-dashboard tabs; Codex USD cost is estimated from credits at 1000 credits = $40,
-while Claude Code cost is calculated from its token fields using the Claude API
-pricing table.
+It shows Codex and Claude Code on separate dashboard tabs, with usage history,
+token totals, estimated USD cost, and attribution breakdowns. Codex USD cost is
+estimated from credits at 1000 credits = $40; Claude Code USD cost is calculated
+from Claude Code telemetry using the Claude API pricing table.
 
 ## Requirements
 
@@ -95,10 +91,8 @@ new OTLP events. Events emitted while it is stopped are not backfilled.
 
 ## Configure Claude Code OTLP
 
-Claude Code sends OTLP log/events to the same local gRPC receiver. The dashboard
-uses Claude Code `api_request` log records for token and cost charts; metrics and
-traces may be accepted by the receiver, but they are not stored for dashboard
-charts.
+Claude Code sends OTLP log/events to the same local gRPC receiver. Token and cost
+charts are populated from Claude Code telemetry.
 
 For persistent setup, edit `~/.claude/settings.json` and merge these entries into
 the existing `env` object:
@@ -127,10 +121,9 @@ export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4317
 claude
 ```
 
-The dashboard normalizes Claude Code `api_request` log records that include
-token fields. It calculates USD cost by token type at ingest time; if the log
-also includes `cost_usd`, that reported value is preserved separately for
-comparison.
+Claude Code cost is calculated from the token counts in its telemetry. If Claude
+Code also reports its own `cost_usd`, the dashboard keeps that value separately
+for comparison.
 
 For the full Claude Code telemetry configuration surface, see the
 [Claude Code Monitoring docs](https://code.claude.com/docs/en/monitoring-usage).
@@ -180,6 +173,10 @@ Quarkus reads a `.env` file from the working directory. See
 variables:
 
 ```sh
+# Tool-specific ingestion flags
+CODEX_USAGE_DASHBOARD_CODEX_ENABLED=true
+CODEX_USAGE_DASHBOARD_CLAUDE_ENABLED=true
+
 # Ports / bind addresses
 QUARKUS_HTTP_HOST=127.0.0.1
 QUARKUS_HTTP_PORT=4318
@@ -189,41 +186,53 @@ QUARKUS_GRPC_SERVER_PORT=4317
 # Local storage
 QUARKUS_DATASOURCE_JDBC_URL='jdbc:sqlite:data/codex-usage-dashboard.sqlite?journal_mode=WAL&busy_timeout=10000'
 
-# Codex local state used for enrichment
-CODEX_STATE5_PATH="$HOME/.codex/state_5.sqlite"
-CODEX_LOGS2_PATH="$HOME/.codex/logs_2.sqlite"
-CODEX_BIN=codex
-
-# Tool-specific ingestion flags
-CODEX_USAGE_DASHBOARD_CODEX_ENABLED=true
-CODEX_USAGE_DASHBOARD_CLAUDE_ENABLED=true
-
 # Local telemetry retention
 CODEX_USAGE_DASHBOARD_RETENTION_EVERY=1h
 CODEX_USAGE_DASHBOARD_RETENTION_OTEL_LOG_RECORDS=14d
 CODEX_USAGE_DASHBOARD_RETENTION_ANNOTATED_EVENTS=365d
 CODEX_USAGE_DASHBOARD_RETENTION_USAGE_SAMPLES=365d
+
+# Codex local state paths
+CODEX_STATE5_PATH="$HOME/.codex/state_5.sqlite"
+CODEX_LOGS2_PATH="$HOME/.codex/logs_2.sqlite"
+CODEX_BIN=codex
+
+# Receive-time drop filter for noisy OTLP log records
+CODEX_USAGE_DASHBOARD_INGEST_DROP_EVENT_KINDS='^response[.].+[.]delta$'
+
+# Advanced polling / batch tuning
+CODEX_USAGE_DASHBOARD_ANNOTATE_EVERY=60s
+CODEX_USAGE_DASHBOARD_ANNOTATE_BATCH_SIZE=500
+CODEX_USAGE_DASHBOARD_USAGE_EVERY=60s
 ```
 
 Set `CODEX_USAGE_DASHBOARD_CODEX_ENABLED=false` on machines without Codex. This
-skips Codex OTLP annotation and Codex usage polling, so the app will not try to
-launch `codex`. Set `CODEX_USAGE_DASHBOARD_CLAUDE_ENABLED=false` to ignore Claude
-Code OTLP logs. Disabled tools are also hidden from the dashboard tool switcher.
+ignores Codex OTLP logs and skips Codex usage polling, so the app will not try
+to launch `codex`. Set `CODEX_USAGE_DASHBOARD_CLAUDE_ENABLED=false` to ignore
+Claude Code OTLP logs. Disabled tools are also hidden from the dashboard tool
+switcher.
 
-Retention is enforced independently for the tables owned by this app:
+Retention is enforced independently for each kind of local data:
 
-- `otel_log_records`: raw OTLP log records. These are the largest rows and back
-  the raw event drill-down. Old raw rows are deleted only after the annotation
-  cursor has passed them, so unprocessed backlog is preserved.
-- `annotated_events`: parsed Codex and Claude Code token, cost, trigger, and
-  error rows used by the dashboard charts and tables.
-- `usage_samples`: periodic Codex rate-limit percentage snapshots.
+- Raw OTLP log records: the original Codex and Claude Code OTLP log payloads used
+  by the raw event drill-down. These are usually the largest records. The
+  configured retention age is a cleanup threshold, not a guarantee that every
+  older record disappears immediately.
+- Dashboard history: parsed token, cost, trigger, and error data used by charts
+  and tables.
+- Codex usage samples: periodic Codex rate-limit percentage snapshots.
 
-Set any retention value to `0` or `disabled` to keep that table indefinitely.
-Deleting raw OTLP rows does not remove already annotated chart history, but raw
-drill-down and annotation replay are unavailable for rows whose raw source was
-deleted. SQLite may reuse freed pages without immediately shrinking the database
-file; run `VACUUM` manually if you need to compact the file on disk.
+Set any retention value to `0` or `disabled` to keep that data type indefinitely.
+Deleting old raw OTLP records does not remove already-built chart history, but
+raw event drill-down for those older events will no longer be available. SQLite
+may reuse freed pages without immediately shrinking the database file; run
+`VACUUM` manually if you need to compact the file on disk.
+
+By default, receive-time ingestion drops high-volume Codex streaming delta records
+whose `event.kind` matches `^response[.].+[.]delta$`. Those rows do not carry token
+usage and can be much noisier than completed request records. Set
+`CODEX_USAGE_DASHBOARD_INGEST_DROP_EVENT_KINDS` to an empty value if you need to
+store every received OTLP log record.
 
 ## OTLP Support
 
@@ -233,6 +242,9 @@ Supported:
 - OTLP/HTTP protobuf on `:4318/v1/logs`
 - gzip-compressed OTLP/HTTP protobuf bodies
 - Claude Code OTLP log `api_request` records with token and `cost_usd` fields
+
+Dashboard charts are based on OTLP logs. Metrics and traces may be accepted by
+the receiver, but they are not shown in dashboard charts.
 
 Not supported:
 

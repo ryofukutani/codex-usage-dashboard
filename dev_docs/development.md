@@ -48,7 +48,8 @@ The native build requires a GraalVM 25 distribution with `native-image` availabl
 (set `GRAALVM_HOME` / `JAVA_HOME` to it, or put `native-image` on `PATH`).
 Alternatively build inside a container with
 `-Dquarkus.native.container-build=true` (needs a container runtime). The GitHub
-release workflow builds the published binaries this way.
+release workflow builds the published macOS binary directly on the `macos-14`
+runner with GraalVM 25.
 
 `application.properties` sets:
 
