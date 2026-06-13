@@ -10,6 +10,18 @@ token totals, estimated USD cost, and attribution breakdowns. Codex USD cost is
 estimated from credits at 1000 credits = $40; Claude Code USD cost is calculated
 from Claude Code telemetry using the Claude API pricing table.
 
+## Dashboard Preview
+
+The screenshots below show a 12-hour range at 5-minute grain.
+
+### Codex
+
+![Codex dashboard charts for a 12-hour range at 5-minute grain](docs/assets/codex-dashboard-12h-5m.jpg)
+
+### Claude Code
+
+![Claude Code dashboard charts for a 12-hour range at 5-minute grain](docs/assets/claude-dashboard-12h-5m.jpg)
+
 ## Requirements
 
 - Codex tab: Codex OTLP export configured (see

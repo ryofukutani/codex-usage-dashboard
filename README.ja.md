@@ -6,6 +6,18 @@
 
 ダッシュボード上では Codex / Claude Code を別タブで表示し、利用履歴、トークン数、USD コスト推定、利用主体の内訳を確認できます。Codex の USD コストは 1000 credits = $40 として概算し、Claude Code の USD コストは Claude Code テレメトリと Claude API の料金表から計算します。
 
+## ダッシュボード例
+
+以下は 12時間 / 5分刻みで表示したスクリーンショットです。
+
+### Codex
+
+![12時間 / 5分刻みの Codex ダッシュボードのチャート](docs/assets/codex-dashboard-12h-5m.jpg)
+
+### Claude Code
+
+![12時間 / 5分刻みの Claude Code ダッシュボードのチャート](docs/assets/claude-dashboard-12h-5m.jpg)
+
 ## 必要なもの
 
 - Codex タブ: Codex の OTLP エクスポート設定([Codex の OTLP 設定](#codex-の-otlp-設定))
