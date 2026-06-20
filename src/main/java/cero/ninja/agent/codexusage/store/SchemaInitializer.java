@@ -43,6 +43,12 @@ public class SchemaInitializer {
             ON otel_log_records(received_at)
             """;
 
+    private static final String RAW_CLAUDE_PROMPT_ID_INDEX = """
+            CREATE INDEX IF NOT EXISTS idx_otel_log_records_claude_prompt_id
+            ON otel_log_records(json_extract(record_json, '$.attributes."prompt.id"'))
+            WHERE json_extract(record_json, '$.attributes."prompt.id"') IS NOT NULL
+            """;
+
     private static final String ANNOTATED_TABLE = """
             CREATE TABLE IF NOT EXISTS annotated_events (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -261,6 +267,7 @@ public class SchemaInitializer {
         db.sql(ANNOTATED_CREDIT_TIME_INDEX).update();
         db.sql(ANNOTATED_REQUEST_INDEX).update();
         db.sql(RAW_RECEIVED_AT_INDEX).update();
+        db.sql(RAW_CLAUDE_PROMPT_ID_INDEX).update();
         db.sql(USAGE_WINDOW_TIME_INDEX).update();
         db.sql(USAGE_SAMPLED_AT_INDEX).update();
     }

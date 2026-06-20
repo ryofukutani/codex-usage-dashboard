@@ -5,6 +5,7 @@ import io.opentelemetry.proto.collector.logs.v1.ExportLogsServiceRequest;
 import io.opentelemetry.proto.collector.logs.v1.ExportLogsServiceResponse;
 import io.opentelemetry.proto.collector.logs.v1.LogsServiceGrpc;
 import io.quarkus.grpc.GrpcService;
+import io.smallrye.common.annotation.Blocking;
 import jakarta.inject.Inject;
 
 @GrpcService
@@ -14,6 +15,7 @@ public class OtlpLogsGrpcReceiver extends LogsServiceGrpc.LogsServiceImplBase {
     RawLogStore rawLogStore;
 
     @Override
+    @Blocking
     public void export(
             ExportLogsServiceRequest request,
             StreamObserver<ExportLogsServiceResponse> responseObserver
